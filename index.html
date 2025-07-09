@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TaleGenie - AI Story Creator</title>
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      margin: 2rem; 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      color: #333;
+    }
+    
+    .container {
+      background: white;
+      border-radius: 15px;
+      padding: 2rem;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    
+    h1 {
+      text-align: center;
+      color: #4a5568;
+      margin-bottom: 2rem;
+    }
+    
+    h2 {
+      color: #4a5568;
+      margin-bottom: 1rem;
+    }
+    
+    .progress { 
+      margin-top: 1rem; 
+      font-weight: bold;
+      color: #2d3748;
+      padding: 1rem;
+      background: #edf2f7;
+      border-radius: 8px;
+    }
+    
+    .logs { 
+      font-family: monospace; 
+      white-space: pre-wrap; 
+      background: #f7fafc; 
+      padding: 1rem; 
+      max-height: 200px; 
+      overflow-y: auto; 
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+      margin-top: 1rem;
+    }
+    
+    .character-preview {
+      text-align: center;
+      margin: 2rem 0;
+      padding: 1.5rem;
+      background: #f7fafc;
+      border-radius: 12px;
+      border: 2px solid #667eea;
+    }
+    
+    .character-preview img {
+      width: 100%;
+      max-width: 300px;
+      border-radius: 12px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    }
+    
+    .character-preview h3 {
+      color: #4a5568;
+      margin: 1rem 0 0.5rem;
+    }
+    
+    .field { 
+      margin-bottom: 1rem; 
+    }
+    
+    .field label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: bold;
+      color: #4a5568;
+    }
+    
+    .field input {
+      width: 100%;
+      padding: 0.75rem;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 1rem;
+      transition: border-color 0.3s ease;
+      box-sizing: border-box;
+    }
+    
+    .field input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    
+    button {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 1rem 2rem;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: transform 0.3s ease;
+      margin: 0.5rem;
+    }
+    
+    button:hover {
+      transform: translateY(-2px);
+    }
+    
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .comic-scene {
+      background: #f7fafc;
+      border-radius: 15px;
+      padding: 2rem;
+      margin: 2rem 0;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    
+    .comic-scene img {
+      width: 100%;
+      max-width: 400px;
+      border-radius: 12px;
+      margin-bottom: 1rem;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    }
+    
+    .scene-description {
+      font-size: 1.1rem;
+      line-height: 1.6;
+      margin-bottom: 1.5rem;
+      color: #2d3748;
+      background: white;
+      padding: 1rem;
+      border-radius: 8px;
+      border-left: 4px solid #667eea;
+    }
+    
+    .scene-question {
+      font-size: 1.2rem;
+      font-weight: bold;
+      margin-bottom: 1rem;
+      color: #4a5568;
+    }
+    
+    .options {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    
+    .option-button {
+      background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+      min-width: 200px;
+      padding: 1rem 1.5rem;
+    }
+    
+    .lesson {
+      background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+      color: white;
+      padding: 1.5rem;
+      border-radius: 12px;
+      font-size: 1.2rem;
+      font-weight: bold;
+      margin-top: 2rem;
+    }
+    
+    .hidden {
+      display: none;
+    }
+    
+    .center {
+      text-align: center;
+    }
+    
+    .success-icon {
+      color: #48bb78;
+      font-size: 1.2em;
+    }
+    
+    .error-icon {
+      color: #f56565;
+      font-size: 1.2em;
+    }
+    
+    .loading {
+      display: inline-block;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .scene-counter {
+      background: #667eea;
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+      display: inline-block;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin: 1rem 0;
+      padding: 1rem;
+      border-radius: 8px;
+      background: #f0f9ff;
+      border-left: 4px solid #0284c7;
+    }
+    
+    .status-complete {
+      background: #f0fdf4;
+      border-left-color: #22c55e;
+    }
+    
+    .status-error {
+      background: #fef2f2;
+      border-left-color: #ef4444;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📚 TaleGenie - AI Story Creator ✨</h1>
+    
+    <!-- Step 1: Photo Upload Form -->
+    <div id="uploadSection">
+      <h2>Create Your Personalized Story 🎭</h2>
+      <p>Upload photos of your child to create their personalized interactive story:</p>
+      
+      <form id="uploadForm">
+        <div class="field">
+          <label>Child's Name:</label>
+          <input type="text" name="name" required placeholder="Enter your child's name">
+        </div>
+        <div class="field">
+          <label>Gender:</label>
+          <input type="text" name="gender" required placeholder="boy/girl">
+        </div>
+        <div class="field">
+          <label>Age:</label>
+          <input type="number" name="age" required placeholder="2" min="1" max="12" value="2">
+        </div>
+        <div class="field">
+          <label>Outfit Details:</label>
+          <input type="text" name="outfit" required placeholder="red polo tshirt and blue shorts and shoes">
+        </div>
+        <div class="field">
+          <label>Photos (minimum 5):</label>
+          <input type="file" name="photos" accept="image/*" multiple required>
+          <small style="color: #666;">Upload 5-10 clear photos of your child for best results</small>
+        </div>
+        <div class="center">
+          <button type="submit">🚀 Create Character & Story</button>
+        </div>
+      </form>
+      
+      <div class="progress" id="progress"></div>
+      <div class="logs" id="logs"></div>
+    </div>
+
+    <!-- Step 2: Character Creation & Story Generation -->
+    <div id="generationSection" class="hidden">
+      <h2>Creating Your Character & Story... 🎨</h2>
+      
+      <!-- Character creation status -->
+      <div class="status-indicator" id="characterStatus">
+        <span class="loading">⏳</span>
+        <span>Creating your personalized character...</span>
+      </div>
+      
+      <!-- Character preview (shown when ready) -->
+      <div id="characterPreview" class="character-preview hidden">
+        <h3>Your Character is Ready! 🎉</h3>
+        <img id="characterImage" src="" alt="Generated Character">
+        <p>Now generating your interactive story...</p>
+      </div>
+      
+      <!-- Story generation status -->
+      <div class="status-indicator hidden" id="storyStatus">
+        <span class="loading">⏳</span>
+        <span>Generating your interactive story scenes...</span>
+      </div>
+      
+      <div class="logs" id="generationLogs"></div>
+      <p style="color: #666; text-align: center; margin-top: 1rem;">
+        <em>Creating character and 8 interactive story scenes... This takes about 8-12 minutes total.</em>
+      </p>
+    </div>
+
+    <!-- Step 3: Interactive Comic Story -->
+    <div id="comicSection" class="hidden">
+      <h2>Your Interactive Story: "The Red Truck Adventure" 🚛</h2>
+      <div id="currentScene" class="comic-scene"></div>
+      <div class="center">
+        <button id="playAgainBtn" class="hidden">🔄 Play Again</button>
+        <button id="backToStartBtn" class="hidden" onclick="location.reload()">🏠 Create New Story</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('uploadForm');
+    const progressEl = document.getElementById('progress');
+    const logsEl = document.getElementById('logs');
+    const uploadSection = document.getElementById('uploadSection');
+    const generationSection = document.getElementById('generationSection');
+    const comicSection = document.getElementById('comicSection');
+    const playAgainBtn = document.getElementById('playAgainBtn');
+    const backToStartBtn = document.getElementById('backToStartBtn');
+    const generationLogs = document.getElementById('generationLogs');
+    const currentScene = document.getElementById('currentScene');
+    const characterStatus = document.getElementById('characterStatus');
+    const characterPreview = document.getElementById('characterPreview');
+    const characterImage = document.getElementById('characterImage');
+    const storyStatus = document.getElementById('storyStatus');
+
+    let currentRunId = null;
+    let comicScenes = {};
+    let currentSceneId = 'scene1';
+
+    function appendLog(msg) {
+      const timestamp = new Date().toLocaleTimeString();
+      logsEl.textContent += `[${timestamp}] ${msg}\n`;
+      logsEl.scrollTop = logsEl.scrollHeight;
+      console.log(msg);
+    }
+
+    function appendGenerationLog(msg) {
+      const timestamp = new Date().toLocaleTimeString();
+      generationLogs.textContent += `[${timestamp}] ${msg}\n`;
+      generationLogs.scrollTop = generationLogs.scrollHeight;
+      console.log(msg);
+    }
+
+    function updateCharacterStatus(message, isComplete = false, isError = false) {
+      const icon = characterStatus.querySelector('span:first-child');
+      const text = characterStatus.querySelector('span:last-child');
+      
+      if (isError) {
+        icon.innerHTML = '❌';
+        icon.className = 'error-icon';
+        characterStatus.className = 'status-indicator status-error';
+      } else if (isComplete) {
+        icon.innerHTML = '✅';
+        icon.className = 'success-icon';
+        characterStatus.className = 'status-indicator status-complete';
+      } else {
+        icon.innerHTML = '⏳';
+        icon.className = 'loading';
+        characterStatus.className = 'status-indicator';
+      }
+      
+      text.textContent = message;
+    }
+
+    function updateStoryStatus(message, isComplete = false, isError = false) {
+      const icon = storyStatus.querySelector('span:first-child');
+      const text = storyStatus.querySelector('span:last-child');
+      
+      if (isError) {
+        icon.innerHTML = '❌';
+        icon.className = 'error-icon';
+        storyStatus.className = 'status-indicator status-error';
+      } else if (isComplete) {
+        icon.innerHTML = '✅';
+        icon.className = 'success-icon';
+        storyStatus.className = 'status-indicator status-complete';
+      } else {
+        icon.innerHTML = '⏳';
+        icon.className = 'loading';
+        storyStatus.className = 'status-indicator';
+      }
+      
+      text.textContent = message;
+    }
+
+    function showScene(sceneId) {
+      const scene = comicScenes[sceneId];
+      if (!scene) {
+        console.error('Scene not found:', sceneId);
+        return;
+      }
+
+      currentSceneId = sceneId;
+      
+      // Scene counter
+      const sceneNumber = Object.keys(comicScenes).indexOf(sceneId) + 1;
+      const totalScenes = Object.keys(comicScenes).length;
+      
+      let html = `
+        <div class="scene-counter">Scene ${sceneNumber} of ${totalScenes}</div>
+        <img src="${scene.image_url}" alt="Comic Scene" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjBmMGYwIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkxvYWRpbmcgU2NlbmUuLi48L3RleHQ+PC9zdmc+'">
+        <div class="scene-description">${scene.description.replace(/\n/g, '<br>')}</div>
+      `;
+
+      if (scene.question && scene.options) {
+        html += `<div class="scene-question">${scene.question}</div>`;
+        html += '<div class="options">';
+        
+        Object.entries(scene.options).forEach(([key, value]) => {
+          html += `<button class="option-button" onclick="handleChoice('${key}')">${key}. ${value}</button>`;
+        });
+        
+        html += '</div>';
+      } else if (scene.lesson) {
+        html += `<div class="lesson">🌟 ${scene.lesson}</div>`;
+        playAgainBtn.classList.remove('hidden');
+        backToStartBtn.classList.remove('hidden');
+      }
+
+      currentScene.innerHTML = html;
+    }
+
+    function handleChoice(choice) {
+      // Determine next scene based on current scene and choice
+      let nextSceneId;
+      
+      console.log(`Current scene: ${currentSceneId}, Choice: ${choice}`);
+      
+      if (currentSceneId === 'scene1') {
+        nextSceneId = choice === 'A' ? 'scene2A' : 'scene2B';
+      } else if (currentSceneId === 'scene2A') {
+        nextSceneId = choice === 'A' ? 'scene3A1' : 'scene3A2';
+      } else if (currentSceneId === 'scene2B') {
+        nextSceneId = choice === 'A' ? 'scene3B1' : 'scene3B2';
+      } else {
+        nextSceneId = 'scene4'; // All scene3 variants lead to scene4
+      }
+
+      console.log(`Next scene: ${nextSceneId}`);
+
+      // Add a small delay for better UX
+      setTimeout(() => {
+        showScene(nextSceneId);
+      }, 500);
+    }
+
+    // Play Again Button Event
+    playAgainBtn.addEventListener('click', () => {
+      currentSceneId = 'scene1';
+      showScene('scene1');
+      playAgainBtn.classList.add('hidden');
+      backToStartBtn.classList.add('hidden');
+    });
+
+    // Main Form Submission
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      logsEl.textContent = '';
+      generationLogs.textContent = '';
+      progressEl.innerHTML = '<span class="loading">⏳</span> Uploading photos...';
+      appendLog('🖼 Starting photo upload...');
+
+      const formData = new FormData(form);
+      
+      // Get form values for logging
+      const childName = formData.get('name');
+      const childAge = formData.get('age');
+      const childGender = formData.get('gender');
+      appendLog(`Creating character for ${childName}, ${childAge} year old ${childGender}`);
+
+      try {
+        // 1) Upload photos
+        progressEl.innerHTML = '<span class="loading">⏳</span> Processing photos...';
+        const uploadRes = await fetch('/upload-photos', { method: 'POST', body: formData });
+        const uploadResult = await uploadRes.json();
+        
+        appendLog(`Upload response: ${uploadResult.success ? 'Success' : 'Failed'}`);
+        
+        if (!uploadResult.success) {
+          progressEl.innerHTML = '<span class="error-icon">❌</span> Upload failed: ' + uploadResult.error;
+          appendLog('❌ Upload error: ' + uploadResult.error);
+          return;
+        }
+        
+        const { character_id, token_string, zip_path } = uploadResult;
+        currentRunId = character_id;
+        appendLog(`✅ Photos uploaded successfully. Character ID: ${character_id}`);
+
+        // 2) Switch to generation section
+        uploadSection.classList.add('hidden');
+        generationSection.classList.remove('hidden');
+        
+        updateCharacterStatus('Training AI model...');
+        appendGenerationLog('🚀 Starting AI character creation...');
+
+        // 3) Start training pipeline
+        const startRes = await fetch('/start-secure-pipeline', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ character_id, token_string, zip_path })
+        });
+        const startResult = await startRes.json();
+        
+        if (!startResult.success) {
+          updateCharacterStatus('Training failed: ' + startResult.error, false, true);
+          appendGenerationLog('❌ Training start error: ' + startResult.error);
+          return;
+        }
+
+        appendGenerationLog('✅ Training started successfully');
+        updateCharacterStatus('Training AI model (10-15 minutes)...');
+
+        // 4) Poll for results
+        appendGenerationLog('🔄 Waiting for character training to complete...');
+        
+        let attempts = 0;
+        const maxAttempts = 60; // 15 minutes max
+        
+        const pollInterval = setInterval(async () => {
+          attempts++;
+          
+          try {
+            const res = await fetch(`/results/${currentRunId}`);
+            
+            if (res.status === 202) {
+              appendGenerationLog(`⏳ Still training character... (${attempts}/${maxAttempts})`);
+              return;
+            }
+            
+            clearInterval(pollInterval);
+            const result = await res.json();
+
+            if (!result.success) {
+              updateCharacterStatus('Training failed: ' + result.error, false, true);
+              appendGenerationLog('❌ Training failed: ' + result.error);
+              return;
+            }
+
+            // Character is ready!
+            updateCharacterStatus('Character created successfully!', true);
+            appendGenerationLog('✅ Character training completed successfully!');
+            
+            // Show character preview
+            if (result.character_image) {
+              characterImage.src = result.character_image;
+              characterPreview.classList.remove('hidden');
+              appendGenerationLog('🎨 Character image generated!');
+            }
+
+            // Check if comic generation already started (backend auto-starts it)
+            if (result.comic_started) {
+              storyStatus.classList.remove('hidden');
+              updateStoryStatus('Generating story scenes...');
+              appendGenerationLog('📚 Story generation started automatically...');
+              
+              // Start polling for comic results
+              pollForComicResults();
+            }
+            
+          } catch (error) {
+            clearInterval(pollInterval);
+            updateCharacterStatus('Error checking results: ' + error.message, false, true);
+            appendGenerationLog('❌ Polling error: ' + error.message);
+          }
+          
+          if (attempts >= maxAttempts) {
+            clearInterval(pollInterval);
+            updateCharacterStatus('Training timed out after 15 minutes', false, true);
+            appendGenerationLog('❌ Training timed out');
+          }
+        }, 15000); // Check every 15 seconds
+
+      } catch (error) {
+        progressEl.innerHTML = '<span class="error-icon">❌</span> Error: ' + error.message;
+        appendLog('❌ Unexpected error: ' + error.message);
+      }
+    });
+
+    function pollForComicResults() {
+      appendGenerationLog('🚀 Generating 8 interactive story scenes...');
+      appendGenerationLog('⏳ This will take about 6-8 minutes...');
+      
+      let comicAttempts = 0;
+      const maxComicAttempts = 40; // 10+ minutes
+      
+      const comicInterval = setInterval(async () => {
+        comicAttempts++;
+        
+        try {
+          const res = await fetch(`/comic-results/${currentRunId}`);
+          
+          if (res.status === 202) {
+            appendGenerationLog(`⏳ Still generating scenes... (${comicAttempts}/${maxComicAttempts})`);
+            updateStoryStatus(`Generating scenes... (${comicAttempts}/${maxComicAttempts})`);
+            return;
+          }
+          
+          clearInterval(comicInterval);
+          
+          if (res.status === 500) {
+            const error = await res.json();
+            updateStoryStatus('Story generation failed!', false, true);
+            appendGenerationLog('❌ Error: ' + error.error);
+            return;
+          }
+
+          const comicFinalResult = await res.json();
+          
+          if (comicFinalResult.success) {
+            comicScenes = comicFinalResult.comic_scenes;
+            appendGenerationLog(`✅ All ${Object.keys(comicScenes).length} scenes generated successfully!`);
+            updateStoryStatus('Your story is ready!', true);
+            
+            // Show comic section
+            setTimeout(() => {
+              generationSection.classList.add('hidden');
+              comicSection.classList.remove('hidden');
+              showScene('scene1');
+            }, 1500);
+          } else {
+            updateStoryStatus('Story generation failed!', false, true);
+            appendGenerationLog('❌ Error: ' + comicFinalResult.error);
+          }
+          
+        } catch (error) {
+          clearInterval(comicInterval);
+          updateStoryStatus('Error checking story results: ' + error.message, false, true);
+          appendGenerationLog('❌ Polling error: ' + error.message);
+        }
+        
+        if (comicAttempts >= maxComicAttempts) {
+          clearInterval(comicInterval);
+          updateStoryStatus('Story generation timed out', false, true);
+          appendGenerationLog('❌ Story generation timed out after 10+ minutes');
+        }
+      }, 15000); // Check every 15 seconds
+    }
+  </script>
+</body>
+</html>
