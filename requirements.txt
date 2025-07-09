@@ -5,3 +5,4 @@ requests
 pillow
 python-dotenv
 cloudinary
+gunicorn
