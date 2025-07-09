@@ -1,0 +1,7 @@
+flask
+flask-cors
+replicate
+requests
+pillow
+python-dotenv
+cloudinary
