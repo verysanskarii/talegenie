@@ -154,7 +154,7 @@ def upload_photos():
         # 2) Validate & process files
         files = request.files.getlist('photos')
         logger.info(f"[{run_id}] Received {len(files)} photos")
-        if len(files) < 5:
+        if len(files) < 1:
             raise ValueError(f"Need at least 5 photos, got {len(files)}")
 
         paths = []
