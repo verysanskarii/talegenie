@@ -689,10 +689,26 @@ def run_comic_generation(run_id, selected_variation_url):
 def get_comic_results(run_id):
     comic_key = f"{run_id}_comic"
     rec = store.get(comic_key)
+
     if rec and rec.get('status') == 'completed':
-        return jsonify(store.pop(comic_key))
+        # pop out the stored record
+        record = store.pop(comic_key)
+        # convert the scenes dict → a list of scene objects
+        scenes_dict = record.get('comic_scenes', {})
+        scene_list = [
+            {"scene_id": sid, **data}
+            for sid, data in scenes_dict.items()
+        ]
+        # return the reshaped payload
+        return jsonify({
+            "success":      record["success"],
+            "status":       record["status"],
+            "comic_scenes": scene_list
+        })
+
     elif rec and rec.get('status') == 'failed':
         return jsonify(rec), 500
+
     return jsonify(success=False, status='generating'), 202
 
 @app.route('/results/<run_id>', methods=['GET'])
