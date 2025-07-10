@@ -5,6 +5,7 @@ import threading
 import zipfile
 import uuid
 import requests
+import json
 
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -238,7 +239,7 @@ def run_pipeline(run_id):
         }
         
         # Check if model exists, create if not
-        model_check = requests.get(f"https://api.replicate.com/v1/models/{dest}", headers=headers)
+        model_check = requests.get(f"https://api.replicate.com/v1/models/{dest}", headers=headers, timeout=30)
         if model_check.status_code == 404:
             logger.info(f"[{run_id}] Creating model: {dest}")
             payload = {
@@ -249,16 +250,16 @@ def run_pipeline(run_id):
                 'hardware': 'gpu-t4'
             }
             create_response = requests.post("https://api.replicate.com/v1/models",
-                          headers=headers, json=payload)
+                          headers=headers, json=payload, timeout=30)
             create_response.raise_for_status()
             logger.info(f"[{run_id}] Model created successfully")
         else:
             logger.info(f"[{run_id}] Model already exists")
 
-        # 3) Start training
-        training = rep_client.trainings.create(
-            version="ostris/flux-dev-lora-trainer:e440909d3512c31646ee2e0c7d6f6f4923224863a6a10c494606e79fb5844497",
-            input={
+        # 3) Start training - using direct API call
+        training_payload = {
+            'version': "ostris/flux-dev-lora-trainer:e440909d3512c31646ee2e0c7d6f6f4923224863a6a10c494606e79fb5844497",
+            'input': {
                 'input_images': signed_url,
                 'token_string': token,
                 'caption_prefix': f"a photo of {token}",
@@ -267,66 +268,76 @@ def run_pipeline(run_id):
                 'batch_size': 1,
                 'resolution': 512
             },
-            destination=dest
-        )
-        logger.info(f"[{run_id}] Training started: {training.id}")
+            'destination': dest
+        }
 
-        # 4) Poll until done with better error handling
+        training_response = requests.post(
+            "https://api.replicate.com/v1/trainings",
+            headers=headers,
+            json=training_payload,
+            timeout=30
+        )
+
+        if training_response.status_code != 201:
+            raise RuntimeError(f"Training creation failed: {training_response.status_code} - {training_response.text}")
+
+        training_data = training_response.json()
+        training_id = training_data['id']
+        logger.info(f"[{run_id}] Training started: {training_id}")
+
+        # 4) Poll until done with direct API calls
         status = None
-        timeout_count = 0
-        max_timeouts = 3
-        
-        while status not in ('succeeded','failed','canceled'):
+        poll_count = 0
+        max_polls = 120  # 30 minutes max (15 second intervals)
+
+        while status not in ('succeeded', 'failed', 'canceled') and poll_count < max_polls:
+            time.sleep(15)
+            poll_count += 1
+            
             try:
-                time.sleep(15)
-                training = rep_client.trainings.get(training.id)
-                status = training.status
-                logger.info(f"[{run_id}] Training status: {status}")
-                timeout_count = 0  # Reset timeout count on successful check
+                status_response = requests.get(
+                    f"https://api.replicate.com/v1/trainings/{training_id}",
+                    headers=headers,
+                    timeout=30
+                )
                 
-            except Exception as poll_error:
-                timeout_count += 1
-                logger.warning(f"[{run_id}] Polling error ({timeout_count}/{max_timeouts}): {poll_error}")
-                
-                if timeout_count >= max_timeouts:
-                    logger.error(f"[{run_id}] Too many polling failures, checking if training completed...")
-                    
-                    # Final attempt to get training status
-                    try:
-                        training = rep_client.trainings.get(training.id)
-                        status = training.status
-                        logger.info(f"[{run_id}] Final status check: {status}")
-                        
-                        if status == 'succeeded':
-                            logger.info(f"[{run_id}] Training actually succeeded despite polling errors!")
-                            break
-                        elif status in ('failed', 'canceled'):
-                            raise RuntimeError(f"Training {status}")
-                        else:
-                            # Training might still be running, wait a bit more
-                            time.sleep(30)
-                            training = rep_client.trainings.get(training.id)
-                            status = training.status
-                            if status == 'succeeded':
-                                break
-                            else:
-                                raise RuntimeError(f"Training polling failed after multiple attempts. Last status: {status}")
-                                
-                    except Exception as final_error:
-                        raise RuntimeError(f"Training polling failed: {final_error}")
+                if status_response.status_code == 200:
+                    training_data = status_response.json()
+                    status = training_data['status']
+                    logger.info(f"[{run_id}] Training status ({poll_count}/120): {status}")
                 else:
-                    # Wait longer before retrying
-                    time.sleep(30)
-                    
+                    logger.warning(f"[{run_id}] Status check failed: {status_response.status_code}")
+                    if poll_count % 4 == 0:  # Every minute, log the error
+                        logger.warning(f"[{run_id}] Status response: {status_response.text[:200]}")
+        
+            except requests.exceptions.Timeout:
+                logger.warning(f"[{run_id}] Timeout checking training status")
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"[{run_id}] Network error checking status: {e}")
+            except json.JSONDecodeError as e:
+                logger.warning(f"[{run_id}] JSON decode error: {e}")
+                logger.warning(f"[{run_id}] Raw response: {status_response.text[:200]}")
+
+        if poll_count >= max_polls:
+            raise RuntimeError(f"Training timed out after {max_polls} polls")
+
         result['status'] = status
 
         if status != 'succeeded':
-            raise RuntimeError(f"Training failed with status {status}")
+            raise RuntimeError(f"Training failed with status: {status}")
 
-        # 5) Wait a moment and get final training output
-        time.sleep(5)
-        training = rep_client.trainings.get(training.id)
-        output = training.output or {}
+        # Get final training data
+        final_response = requests.get(
+            f"https://api.replicate.com/v1/trainings/{training_id}",
+            headers=headers,
+            timeout=30
+        )
+
+        if final_response.status_code != 200:
+            raise RuntimeError(f"Could not get final training data: {final_response.status_code}")
+
+        final_training_data = final_response.json()
+        output = final_training_data.get('output', {})
         
         logger.info(f"[{run_id}] Training output keys: {list(output.keys())}")
         logger.info(f"[{run_id}] Full training output: {output}")
@@ -352,23 +363,30 @@ def run_pipeline(run_id):
         if not model_ref:
             raise RuntimeError(f"No model reference found. Training output: {output}")
 
-        # 7) Test the model first
+        # 7) Test the model first - using direct API
         logger.info(f"[{run_id}] Testing model: {model_ref}")
-        try:
-            test_prompt = f"{token}, simple test"
-            test_output = rep_client.run(
-                model_ref,
-                input={
-                    'prompt': test_prompt,
-                    'num_outputs': 1,
-                    'num_inference_steps': 1
-                }
-            )
-            test_result = list(test_output)
-            logger.info(f"[{run_id}] Model test successful")
-        except Exception as test_error:
-            logger.error(f"[{run_id}] Model test failed: {test_error}")
-            raise RuntimeError(f"Model test failed: {test_error}")
+
+        test_payload = {
+            'version': model_ref,
+            'input': {
+                'prompt': f"{token}, simple test",
+                'num_outputs': 1,
+                'num_inference_steps': 1
+            }
+        }
+
+        test_response = requests.post(
+            "https://api.replicate.com/v1/predictions",
+            headers=headers,
+            json=test_payload,
+            timeout=30
+        )
+
+        if test_response.status_code != 201:
+            raise RuntimeError(f"Model test failed: {test_response.status_code} - {test_response.text}")
+
+        test_data = test_response.json()
+        logger.info(f"[{run_id}] Model test successful")
 
         # 8) Generate ONE high-quality variation - OPTIMIZED FOR SPEED & QUALITY
         prompt = (
@@ -384,28 +402,77 @@ def run_pipeline(run_id):
         logger.info(f"[{run_id}] Generating HIGH-QUALITY single variation with prompt: {prompt}")
         logger.info(f"[{run_id}] Using model: {model_ref}")
         
-        outs = list(rep_client.run(
-            model_ref,
-            input={
+        # Generate character variation - using direct API
+        generation_payload = {
+            'version': model_ref,
+            'input': {
                 'model': 'dev',
                 'prompt': prompt,
                 'go_fast': False,
-                'lora_scale': 1.2,             # Higher for better resemblance
+                'lora_scale': 1.2,
                 'megapixels': '1',
-                'num_outputs': 1,              # ⭐ Only 1 instead of 4
+                'num_outputs': 1,
                 'aspect_ratio': '1:1',
                 'output_format': 'webp',
-                'guidance_scale': 4,           # Higher for better prompt following
-                'output_quality': 95,          # Much higher quality
-                'prompt_strength': 0.9,        # Stronger influence
-                'extra_lora_scale': 1.2,       # Higher for better resemblance
-                'num_inference_steps': 50      # ✅ FIXED: Changed from 75 to 50
+                'guidance_scale': 4,
+                'output_quality': 95,
+                'prompt_strength': 0.9,
+                'extra_lora_scale': 1.2,
+                'num_inference_steps': 50
             }
-        ))
+        }
+
+        generation_response = requests.post(
+            "https://api.replicate.com/v1/predictions",
+            headers=headers,
+            json=generation_payload,
+            timeout=30
+        )
+
+        if generation_response.status_code != 201:
+            raise RuntimeError(f"Character generation failed: {generation_response.status_code} - {generation_response.text}")
+
+        generation_data = generation_response.json()
+        prediction_id = generation_data['id']
+
+        # Poll for generation completion
+        gen_status = None
+        gen_poll_count = 0
+        max_gen_polls = 40  # 10 minutes max
+
+        while gen_status not in ('succeeded', 'failed', 'canceled') and gen_poll_count < max_gen_polls:
+            time.sleep(15)
+            gen_poll_count += 1
+            
+            gen_status_response = requests.get(
+                f"https://api.replicate.com/v1/predictions/{prediction_id}",
+                headers=headers,
+                timeout=30
+            )
+            
+            if gen_status_response.status_code == 200:
+                gen_data = gen_status_response.json()
+                gen_status = gen_data['status']
+                logger.info(f"[{run_id}] Generation status ({gen_poll_count}/40): {gen_status}")
+                
+                if gen_status == 'succeeded':
+                    outs = gen_data.get('output', [])
+                    break
+            else:
+                logger.warning(f"[{run_id}] Generation status check failed: {gen_status_response.status_code}")
+
+        if gen_status != 'succeeded':
+            raise RuntimeError(f"Character generation failed with status: {gen_status}")
         
         if outs:
-            # Directly use the single variation
-            selected_variation = outs[0]
+            # Handle different output formats and ensure we get a URL string
+            if isinstance(outs, list) and len(outs) > 0:
+                selected_variation = str(outs[0])  # Convert to string to avoid FileOutput issues
+            elif isinstance(outs, str):
+                selected_variation = outs
+            else:
+                selected_variation = str(outs)
+                
             logger.info(f"[{run_id}] Generated high-quality variation: {selected_variation}")
             
             # Start comic generation immediately
@@ -414,8 +481,8 @@ def run_pipeline(run_id):
             
             result.update(
                 success=True, 
-                character_image=selected_variation,  # Single auto-selected variation
-                model_ref=model_ref, 
+                character_image=selected_variation,  # Single auto-selected variation as string
+                model_ref=str(model_ref),  # Ensure this is also a string
                 meta=meta,
                 comic_started=True  # Flag that comic generation started
             )
@@ -519,10 +586,15 @@ def run_comic_generation(run_id, selected_variation_url):
             )
             
             try:
-                # Use WORKING Flux Kontext Dev version
-                scene_output = rep_client.run(
-                    "black-forest-labs/flux-kontext-dev:a1408d2c4fd0af9bf22673accc5c066780fb26f50c70564eddf568601969aee8",
-                    input={
+                # Use direct API call for scene generation to avoid FileOutput serialization issues
+                headers = {
+                    'Authorization': f"Token {REPL_TOKEN}",
+                    'Content-Type': 'application/json'
+                }
+                
+                scene_payload = {
+                    'version': "black-forest-labs/flux-kontext-dev:a1408d2c4fd0af9bf22673accc5c066780fb26f50c70564eddf568601969aee8",
+                    'input': {
                         'prompt': detailed_prompt,
                         'input_image': selected_variation_url,
                         'aspect_ratio': '1:1',
@@ -532,16 +604,57 @@ def run_comic_generation(run_id, selected_variation_url):
                         'output_quality': 80,
                         'go_fast': False
                     }
+                }
+
+                scene_response = requests.post(
+                    "https://api.replicate.com/v1/predictions",
+                    headers=headers,
+                    json=scene_payload,
+                    timeout=30
                 )
+
+                if scene_response.status_code != 201:
+                    raise Exception(f"Scene generation failed: {scene_response.status_code} - {scene_response.text}")
+
+                scene_data = scene_response.json()
+                scene_prediction_id = scene_data['id']
+
+                # Poll for scene completion
+                scene_status = None
+                scene_poll_count = 0
+                max_scene_polls = 30  # 7.5 minutes max
+
+                while scene_status not in ('succeeded', 'failed', 'canceled') and scene_poll_count < max_scene_polls:
+                    time.sleep(15)
+                    scene_poll_count += 1
+                    
+                    scene_status_response = requests.get(
+                        f"https://api.replicate.com/v1/predictions/{scene_prediction_id}",
+                        headers=headers,
+                        timeout=30
+                    )
+                    
+                    if scene_status_response.status_code == 200:
+                        scene_status_data = scene_status_response.json()
+                        scene_status = scene_status_data['status']
+                        logger.info(f"[{run_id}] Scene {scene_id} status ({scene_poll_count}/30): {scene_status}")
+                        
+                        if scene_status == 'succeeded':
+                            scene_output = scene_status_data.get('output', [])
+                            break
+                    else:
+                        logger.warning(f"[{run_id}] Scene status check failed: {scene_status_response.status_code}")
+
+                if scene_status != 'succeeded':
+                    raise Exception(f"Scene generation failed with status: {scene_status}")
                 
-                # Handle different result types properly
-                if isinstance(scene_output, str):
+                # Extract the scene result URL
+                if isinstance(scene_output, list) and len(scene_output) > 0:
+                    scene_result_url = scene_output[0]
+                elif isinstance(scene_output, str):
                     scene_result_url = scene_output
-                elif hasattr(scene_output, '__iter__'):
-                    scene_list = list(scene_output)
-                    scene_result_url = scene_list[0] if scene_list else None
                 else:
-                    scene_result_url = str(scene_output)
+                    raise Exception(f"Unexpected scene output format: {type(scene_output)}")
                 
                 if scene_result_url:
                     comic_scenes[scene_id] = {
@@ -641,12 +754,35 @@ def test_one_scene():
 def test_replicate():
     """Test Replicate connection"""
     try:
-        models = list(rep_client.models.list())[:3]
-        return jsonify({
-            'success': True,
-            'connection': 'OK',
-            'sample_models': [f"{m.owner}/{m.name}" for m in models]
-        })
+        # Test with direct API call instead of client
+        headers = {
+            'Authorization': f"Token {REPL_TOKEN}",
+            'Content-Type': 'application/json'
+        }
+        
+        response = requests.get(
+            "https://api.replicate.com/v1/models",
+            headers=headers,
+            timeout=30,
+            params={'limit': 3}
+        )
+        
+        if response.status_code == 200:
+            models_data = response.json()
+            return jsonify({
+                'success': True,
+                'connection': 'OK',
+                'status_code': response.status_code,
+                'sample_models': [f"{m['owner']}/{m['name']}" for m in models_data.get('results', [])[:3]]
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'connection': 'Failed',
+                'status_code': response.status_code,
+                'error': response.text
+            })
+            
     except Exception as e:
         return jsonify({
             'success': False,
@@ -681,6 +817,20 @@ def test_cloudinary():
             'error': str(e)
         })
 
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Simple health check for Render"""
+    return jsonify({
+        'status': 'healthy',
+        'message': 'TaleGenie AI Pipeline Server is running',
+        'environment_check': {
+            'replicate_token': '✓' if REPL_TOKEN else '✗',
+            'cloudinary_cloud_name': '✓' if os.getenv('CLOUDINARY_CLOUD_NAME') else '✗',
+            'cloudinary_api_key': '✓' if os.getenv('CLOUDINARY_API_KEY') else '✗',
+            'cloudinary_api_secret': '✓' if os.getenv('CLOUDINARY_API_SECRET') else '✗'
+        }
+    })
+
 if __name__ == '__main__':
     print("=== TaleGenie AI Pipeline Server ===")
     print("Make sure environment variables are set:")
@@ -689,7 +839,9 @@ if __name__ == '__main__':
     print(f"- CLOUDINARY_API_KEY: {'✓' if os.getenv('CLOUDINARY_API_KEY') else '✗'}")
     print(f"- CLOUDINARY_API_SECRET: {'✓' if os.getenv('CLOUDINARY_API_SECRET') else '✗'}")
     print("\n🧪 Test endpoints:")
+    print("- Health check: http://localhost:8000/health")
     print("- Single scene: http://localhost:8000/test-one-scene")
-    print("- Health check: http://localhost:8000/test-replicate")
+    print("- Replicate test: http://localhost:8000/test-replicate")
+    print("- Cloudinary test: http://localhost:8000/test-cloudinary")
     print("\nStarting server on http://localhost:8000")
     app.run(debug=True, host='0.0.0.0', port=8000)
