@@ -256,7 +256,7 @@ def run_pipeline(run_id):
         else:
             logger.info(f"[{run_id}] Model already exists")
 
-        # 3) Start training - using direct API call
+        # 3) Start training - using direct API call with correct endpoint
         training_payload = {
             'version': "ostris/flux-dev-lora-trainer:e440909d3512c31646ee2e0c7d6f6f4923224863a6a10c494606e79fb5844497",
             'input': {
@@ -271,8 +271,9 @@ def run_pipeline(run_id):
             'destination': dest
         }
 
+        # Use the correct training endpoint - this was the issue!
         training_response = requests.post(
-            "https://api.replicate.com/v1/trainings",
+            f"https://api.replicate.com/v1/models/ostris/flux-dev-lora-trainer/versions/e440909d3512c31646ee2e0c7d6f6f4923224863a6a10c494606e79fb5844497/trainings",
             headers=headers,
             json=training_payload,
             timeout=30
