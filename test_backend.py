@@ -40,48 +40,39 @@ cloudinary.config(
 # --- In-memory store ---
 store = {}
 
-# --- Helper: gender → robust elements ---
+# --- Helper function for consistent story elements ---
 def get_story_elements(child_gender, child_age):
-    """Generate consistent story elements based on child's gender and age."""
+    """Generate consistent story elements based on child's gender and age"""
+    
     if child_gender.lower() in ['girl', 'female']:
         return {
-            'toy_type': 'small pink teddy bear',
+            'toy_type': 'pink teddy bear',
             'toy_color': 'pink',
             'friend_gender': 'girl',
-            'friend_description': (
-                'another little girl with silky blonde hair in two pigtails, '
-                'wearing a light purple dress and white sandals, gently clutching her own tiny pink teddy bear'
-            ),
-            'teacher_description': (
-                'a caring female teacher in a crisp blue blouse and charcoal slacks, '
-                'smiling warmly as she watches the children'
-            )
+            'friend_description': 'different girl with shoulder-length blonde hair, wearing a purple dress with white flowers, white mary jane shoes, clearly different face and smaller build than main character',
+            'teacher_description': 'adult female teacher with professional brown hair in a bun, wearing navy blue blouse and black dress pants, tall adult woman with mature facial features, clearly an adult not a child',
+            'environment': 'cozy indoor playroom with soft carpet, colorful wall decorations, toy shelves, and warm lighting from windows'
         }
-    else:
+    else:  # boy or other
         return {
-            'toy_type': 'red toy truck with shiny yellow wheels',
+            'toy_type': 'toy truck',
             'toy_color': 'red',
-            'friend_gender': 'boy',
-            'friend_description': (
-                'another little boy with tousled brown hair, '
-                'wearing a green t-shirt and khaki shorts, excitedly holding a matching blue toy car'
-            ),
-            'teacher_description': (
-                'a friendly male teacher in a neat button-up shirt and dark jeans, '
-                'leaning forward with an encouraging smile'
-            )
+            'friend_gender': 'boy', 
+            'friend_description': 'different boy with short curly brown hair, wearing a green striped t-shirt and khaki shorts, sneakers, clearly different face and smaller build than main character',
+            'teacher_description': 'adult male teacher with short dark hair, wearing a light blue button-up shirt and dark navy pants, tall adult man with mature facial features, clearly an adult not a child',
+            'environment': 'sunny outdoor park with green grass, colorful playground equipment, trees, and blue sky'
         }
 
-# --- Comic story scenes ---
+# --- Comic Story Structure (Age-appropriate for 2-year-old) ---
 COMIC_SCENES = {
     'scene1': {
-        'description': "{child_name} is sitting on the playground holding a bright {toy_color} {toy_type}.\nAnother little {friend_gender} sits nearby looking sad with no toys to play with.",
+        'description': "{child_name} is sitting in the {environment} holding a {toy_color} {toy_type}.\nAnother little {friend_gender} sits nearby looking sad with no toys to play with.",
         'question': "What should {child_name} do?",
         'options': {
             'A': "Share the {toy_type} with the other {friend_gender}",
             'B': "Keep playing alone with the {toy_type}"
         },
-        'prompt': "{child_name} sitting on soft playground grass holding bright {toy_color} {toy_type}, {friend_description}, colorful playground with slides in background, sunny day, simple children's book illustration for toddlers, soft warm colors, friendly atmosphere"
+        'prompt': "MAIN CHARACTER: {child_name} wearing {child_outfit} sitting in center foreground holding {toy_color} {toy_type} with both hands, happy expression, SIDE CHARACTER: {friend_description} sitting to the right side in background looking sad with empty hands reaching toward toy, SETTING: {environment}, IMPORTANT: {child_name} is the main focus in center, friend is clearly separate person on the side, very different faces and hair, digital children's book illustration for toddlers, soft warm colors"
     },
     'scene2A': {
         'description': "{child_name} stands up with the {toy_color} {toy_type} and walks toward the sad {friend_gender}.\n{child_name} has a big smile and is holding out the {toy_type} to share.",
@@ -90,59 +81,59 @@ COMIC_SCENES = {
             'A': "Let the other {friend_gender} play with the {toy_type} first",
             'B': "Play with the {toy_type} together"
         },
-        'prompt': "{child_name} walking toward {friend_description}, offering the bright {toy_color} {toy_type} with a happy smile, simple playground background, digital children's book illustration style, warm and kind moment"
+        'prompt': "MAIN CHARACTER: {child_name} wearing {child_outfit} standing in center walking toward right side, holding {toy_color} {toy_type} extended in offering gesture, big smile, SIDE CHARACTER: {friend_description} sitting on right side looking up hopefully at {child_name}, SETTING: {environment}, IMPORTANT: {child_name} is taller and in center moving toward smaller friend on right, clearly different people, digital children's book illustration for toddlers, kind sharing moment"
     },
     'scene2B': {
-        'description': "{child_name} keeps playing with the {toy_color} {toy_type} but glances at the sad {friend_gender}.\n{child_name} feels unsure what to do.",
+        'description': "{child_name} keeps playing with the {toy_color} {toy_type} but looks over at the sad {friend_gender}.\n{child_name} feels a little confused about what to do.",
         'question': "What should {child_name} do now?",
         'options': {
             'A': "Go share the {toy_color} {toy_type}",
             'B': "Ask a grown-up for help"
         },
-        'prompt': "{child_name} sitting on ground holding {toy_color} {toy_type}, turning head to look at {friend_description}, thoughtful expression, simple playground illustration for toddlers"
+        'prompt': "MAIN CHARACTER: {child_name} wearing {child_outfit} sitting in center foreground holding {toy_color} {toy_type} but turning head to look toward right side, thoughtful confused expression, SIDE CHARACTER: {friend_description} sitting on right side in background looking sad, SETTING: {environment}, IMPORTANT: {child_name} is main focus in center, friend is clearly separate smaller person on right side, digital children's book illustration for toddlers, emotional moment"
     },
     'scene3A1': {
-        'description': "The other {friend_gender} is now playing happily with the {toy_color} {toy_type}.\n{child_name} watches nearby with a big smile, waiting patiently.",
+        'description': "The other {friend_gender} is now playing happily with the {toy_color} {toy_type}.\n{child_name} sits nearby watching with a big smile, waiting patiently.",
         'question': "What happens next?",
         'options': {
             'A': "They take turns with the {toy_type}",
             'B': "More kids want to play too"
         },
-        'prompt': "{friend_description} playing with {toy_color} {toy_type}, {child_name} smiling nearby, cooperative scene, children's book illustration style"
+        'prompt': "MAIN CHARACTER: {child_name} wearing {child_outfit} sitting on left side watching with big patient smile, SIDE CHARACTER: {friend_description} on right side playing happily with {toy_color} {toy_type}, both children content, SETTING: {environment}, IMPORTANT: {child_name} on left is main character, friend on right is clearly different person with {friend_description}, digital children's book illustration for toddlers, sharing and patience"
     },
     'scene3A2': {
-        'description': "{child_name} and the other {friend_gender} are both playing with the {toy_color} {toy_type} together, both smiling.",
+        'description': "{child_name} and the other {friend_gender} are both playing with the {toy_color} {toy_type} together.\nThey are having fun and both smiling.",
         'question': "What happens next?",
         'options': {
             'A': "They become good friends",
             'B': "They find more toys to share"
         },
-        'prompt': "{child_name} and {friend_description} playing together with {toy_color} {toy_type}, joyful scene, toddler illustration style"
+        'prompt': "MAIN CHARACTER: {child_name} wearing {child_outfit} on left side holding one part of {toy_color} {toy_type}, SIDE CHARACTER: {friend_description} on right side holding other part of toy, both smiling and playing cooperatively, SETTING: {environment}, IMPORTANT: {child_name} is main character on left, friend is clearly different smaller person on right, digital children's book illustration for toddlers, friendship and teamwork"
     },
     'scene3B1': {
-        'description': "{child_name} stops playing and walks over to share the {toy_color} {toy_type} with the other {friend_gender}, feeling happy.",
+        'description': "{child_name} walks over to share the {toy_color} {toy_type} with the other {friend_gender}.\n{child_name} looks happy to help and make a new friend.",
         'question': "How does {child_name} feel about sharing?",
         'options': {
             'A': "Happy to make a friend",
             'B': "Proud of being kind"
         },
-        'prompt': "{child_name} approaching {friend_description} with {toy_color} {toy_type}, warm smile, playground illustration"
+        'prompt': "MAIN CHARACTER: {child_name} wearing {child_outfit} walking from left to right carrying {toy_color} {toy_type}, happy helpful expression, SIDE CHARACTER: {friend_description} sitting on right side looking hopeful, SETTING: {environment}, IMPORTANT: {child_name} is main character moving from left to right, friend is clearly different smaller person on right, digital children's book illustration for toddlers, learning to share moment"
     },
     'scene3B2': {
-        'description': "A caring adult comes over to help {child_name} learn about sharing.\nThe adult smiles and offers guidance.",
+        'description': "A grown-up comes over to help {child_name} learn about sharing.\nThe grown-up shows {child_name} how good it feels to share toys.",
         'question': "What does {child_name} learn?",
         'options': {
             'A': "Sharing makes everyone happy",
-            'B': "Adults help us learn"
+            'B': "Grown-ups help us learn"
         },
-        'prompt': "{teacher_description} kneeling beside {child_name} holding {toy_color} {toy_type}, gentle guidance moment, bright playground illustration for toddlers, maintain character likeness, keep {child_name} wearing the same outfit"
+        'prompt': "MAIN CHARACTER: {child_name} wearing {child_outfit} sitting in center holding {toy_color} {toy_type}, looking up at adult, ADULT: {teacher_description} kneeling down next to {child_name} on left side, pointing gently toward friend, SIDE CHARACTER: {friend_description} sitting on right side in background, SETTING: {environment}, IMPORTANT: {child_name} is main character in center, adult is clearly tall grown-up with mature face, friend is clearly different smaller child on right, digital children's book illustration for toddlers, gentle teaching moment"
     },
     'scene4': {
-        'description': "{child_name} and the other {friend_gender} play happily together, sharing the {toy_color} {toy_type} and smiling.",
+        'description': "{child_name} and the other {friend_gender} are both playing happily together.\nThey are sharing the {toy_color} {toy_type} and smiling at each other.",
         'question': None,
         'options': None,
-        'prompt': "{child_name} and {friend_description} playing with {toy_color} {toy_type}, joyful friendship scene, children's book style illustration",
-        'lesson': "Sharing your {toy_type} makes everyone happy and helps build friendships!"
+        'prompt': "MAIN CHARACTER: {child_name} wearing {child_outfit} on left side smiling while sharing {toy_color} {toy_type}, SIDE CHARACTER: {friend_description} on right side also smiling while playing with shared toy, both children happy and content, SETTING: {environment}, IMPORTANT: {child_name} is main character on left, friend is clearly different person on right with {friend_description}, digital children's book illustration for toddlers, friendship and happiness finale",
+        'lesson': "Sharing the {toy_color} {toy_type} makes everyone happy and helps us make friends!"
     }
 }
 
@@ -155,38 +146,62 @@ def index():
 def upload_photos():
     run_id = str(uuid.uuid4())[:8]
     try:
+        # 1) Metadata
         meta = {k: request.form[k] for k in ('name','gender','age','outfit')}
         store[run_id] = {'meta': meta}
 
+        # 2) Validate & process files
         files = request.files.getlist('photos')
+        logger.info(f"[{run_id}] Received {len(files)} photos")
         if len(files) < 5:
-            raise ValueError("Need at least 5 photos")
+            raise ValueError(f"Need at least 5 photos, got {len(files)}")
+
         paths = []
-        for i, f in enumerate(files, 1):
-            ext = secure_filename(f.filename).rsplit('.',1)[-1].lower() if f.filename and '.' in f.filename else 'jpg'
+        for i, f in enumerate(files, start=1):
+            # Safe filename handling
+            if not f.filename:
+                continue
+            
+            if '.' in f.filename:
+                ext = secure_filename(f.filename).rsplit('.',1)[-1].lower()
+            else:
+                ext = 'jpg'
+                
             outp = f"temp_photos/{run_id}_{i}.{ext}"
             img = Image.open(f.stream).convert('RGB')
             img.thumbnail((1024,1024), Image.Resampling.LANCZOS)
             img.save(outp,'JPEG',quality=85)
             paths.append(outp)
+            logger.info(f"[{run_id}] Processed photo {i}")
+
+        # 3) Zip
         zip_path = f"temp_zips/{run_id}.zip"
         with zipfile.ZipFile(zip_path,'w') as zf:
-            for idx, p in enumerate(paths,1):
-                zf.write(p, f"photo_{idx:02d}.jpg")
-        token_str = "TOK"
+            for idx, p in enumerate(paths, start=1):
+                if os.path.exists(p):  # Safe path handling
+                    zf.write(p, f"photo_{idx:02d}.jpg")
+        logger.info(f"[{run_id}] Created zip at {zip_path}")
+
+        # 4) Token - using consistent TOK format
+        token_str = "TOK"  # Use consistent token like in your working example
         store[run_id].update(token=token_str, zip_path=zip_path)
-        return jsonify(success=True, character_id=run_id, token_string=token_str, zip_path=zip_path)
+
+        return jsonify(success=True,
+                       character_id=run_id,
+                       token_string=token_str,
+                       zip_path=zip_path)
+
     except Exception as e:
-        logger.exception(f"[{run_id}] upload error")
+        logger.exception(f"[{run_id}] upload_photos error")
         return jsonify(success=False, error=str(e)), 500
 
 @app.route('/start-secure-pipeline', methods=['POST'])
 def start_pipeline():
     data = request.get_json(force=True)
     run_id = data['character_id']
+    logger.info(f"[{run_id}] Launching pipeline thread")
     threading.Thread(target=run_pipeline, args=(run_id,), daemon=True).start()
     return jsonify(success=True, run_id=run_id)
-
 
 def run_pipeline(run_id):
     rec       = store.get(run_id, {})
