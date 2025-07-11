@@ -166,7 +166,7 @@ def upload_photos():
         # ──────────────────────────────────────────────────────────────────
 
         # collect any file field whose name starts with "photos"
-        photo_keys = [k for k in request.files.keys() if k.startswith('photos')]
+        photo_keys = [k for k in request.files.keys() if k.startswith('photo')]
         files = []
         for key in photo_keys:
             files.extend(request.files.getlist(key))
