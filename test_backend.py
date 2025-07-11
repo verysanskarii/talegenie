@@ -157,9 +157,6 @@ def upload_photos():
         for key in photo_keys:
             files.extend(request.files.getlist(key))
 
-        if len(files) < 5:
-            raise ValueError(f"Need at least 5 photos, got {len(files)}")
-
         paths = []
         for i, f in enumerate(files, start=1):
             # Safe filename handling
