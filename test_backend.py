@@ -151,21 +151,32 @@ def upload_photos():
         meta = {k: request.form[k] for k in ('name','gender','age','outfit')}
         store[run_id] = {'meta': meta}
 
+        # ─── DEBUG ECHO ───────────────────────────────────────────────────
+        # Log and return exactly what file‐fields were received
+        incoming_keys = list(request.files.keys())
+        logger.info(f"[{run_id}] Incoming file keys: {incoming_keys}")
+        return jsonify({
+            "success": True,
+            "debug": {
+                "file_keys": incoming_keys,
+                "num_files": len(incoming_keys),
+                "first_filenames": [f.filename for f in request.files.values()][:3]
+            }
+        })
+        # ──────────────────────────────────────────────────────────────────
+
         # collect any file field whose name starts with "photos"
         photo_keys = [k for k in request.files.keys() if k.startswith('photos')]
         files = []
         for key in photo_keys:
             files.extend(request.files.getlist(key))
 
+        # process & thumbnail each file
         paths = []
         for i, f in enumerate(files, start=1):
-            # Safe filename handling
             if not f.filename:
                 continue
-            if '.' in f.filename:
-                ext = secure_filename(f.filename).rsplit('.',1)[-1].lower()
-            else:
-                ext = 'jpg'
+            ext = secure_filename(f.filename).rsplit('.',1)[-1].lower() if '.' in f.filename else 'jpg'
             outp = f"temp_photos/{run_id}_{i}.{ext}"
             img = Image.open(f.stream).convert('RGB')
             img.thumbnail((1024,1024), Image.Resampling.LANCZOS)
@@ -173,22 +184,24 @@ def upload_photos():
             paths.append(outp)
             logger.info(f"[{run_id}] Processed photo {i}")
 
-        # 3) Zip
+        # Zip up the thumbnails
         zip_path = f"temp_zips/{run_id}.zip"
         with zipfile.ZipFile(zip_path,'w') as zf:
             for idx, p in enumerate(paths, start=1):
-                if os.path.exists(p):  # Safe path handling
+                if os.path.exists(p):
                     zf.write(p, f"photo_{idx:02d}.jpg")
         logger.info(f"[{run_id}] Created zip at {zip_path}")
 
-        # 4) Token - using consistent TOK format
-        token_str = "TOK"  # Use consistent token like in your working example
+        # 4) Token—and store
+        token_str = "TOK"
         store[run_id].update(token=token_str, zip_path=zip_path)
 
-        return jsonify(success=True,
-                       character_id=run_id,
-                       token_string=token_str,
-                       zip_path=zip_path)
+        return jsonify(
+            success=True,
+            character_id=run_id,
+            token_string=token_str,
+            zip_path=zip_path
+        )
 
     except Exception as e:
         logger.exception(f"[{run_id}] upload_photos error")
