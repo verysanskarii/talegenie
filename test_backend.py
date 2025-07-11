@@ -151,10 +151,13 @@ def upload_photos():
         meta = {k: request.form[k] for k in ('name','gender','age','outfit')}
         store[run_id] = {'meta': meta}
 
-        # 2) Validate & process files
-        files = request.files.getlist('photos')
-        logger.info(f"[{run_id}] Received {len(files)} photos")
-        if len(files) < 1:
+        # collect any file field whose name starts with "photos"
+        photo_keys = [k for k in request.files.keys() if k.startswith('photos')]
+        files = []
+        for key in photo_keys:
+            files.extend(request.files.getlist(key))
+
+        if len(files) < 5:
             raise ValueError(f"Need at least 5 photos, got {len(files)}")
 
         paths = []
@@ -162,12 +165,10 @@ def upload_photos():
             # Safe filename handling
             if not f.filename:
                 continue
-            
             if '.' in f.filename:
                 ext = secure_filename(f.filename).rsplit('.',1)[-1].lower()
             else:
                 ext = 'jpg'
-                
             outp = f"temp_photos/{run_id}_{i}.{ext}"
             img = Image.open(f.stream).convert('RGB')
             img.thumbnail((1024,1024), Image.Resampling.LANCZOS)
