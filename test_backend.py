@@ -266,9 +266,6 @@ def upload_photos():
         for key in photo_keys:
             files.extend(request.files.getlist(key))
 
-        if len(files) < 5:
-            raise ValueError(f"Need at least 5 photos, got {len(files)}")
-
         paths = []
         for i, f in enumerate(files, start=1):
             # Safe filename handling
@@ -305,7 +302,7 @@ def upload_photos():
     except Exception as e:
         logger.exception(f"[{run_id}] upload_photos error")
         return jsonify(success=False, error=str(e)), 500
-
+        
 @app.route('/start-secure-pipeline', methods=['POST'])
 def start_pipeline():
     data = request.get_json(force=True)
