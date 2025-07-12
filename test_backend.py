@@ -247,6 +247,7 @@ COMIC_SCENES = {
         'end': True
     }
 }
+
 # --- Routes ---
 @app.route('/')
 def index():
@@ -256,53 +257,53 @@ def index():
 def upload_photos():
     run_id = str(uuid.uuid4())[:8]
     try:
-        # 1) Metadata
-        meta = {k: request.form[k] for k in ('name','gender','age','outfit')}
+        # 1) Read form metadata
+        meta = {k: request.form[k] for k in ('name', 'gender', 'age', 'outfit')}
         store[run_id] = {'meta': meta}
 
-        # collect any file field whose name starts with "photos"
-        photo_keys = [k for k in request.files.keys() if k.startswith('photos')]
+        # 2) Collect all uploaded files whose field-name starts with "photo"
+        photo_keys = [key for key in request.files.keys() if key.startswith('photo')]
         files = []
         for key in photo_keys:
             files.extend(request.files.getlist(key))
 
+        # 3) Process each image: sanitize name, resize, save locally
         paths = []
         for i, f in enumerate(files, start=1):
-            # Safe filename handling
             if not f.filename:
                 continue
-            if '.' in f.filename:
-                ext = secure_filename(f.filename).rsplit('.',1)[-1].lower()
-            else:
-                ext = 'jpg'
-            outp = f"temp_photos/{run_id}_{i}.{ext}"
+            ext = secure_filename(f.filename).rsplit('.', 1)[-1].lower() if '.' in f.filename else 'jpg'
+            outp = f"temp_photos/{run_id}_{i:02d}.{ext}"
             img = Image.open(f.stream).convert('RGB')
-            img.thumbnail((1024,1024), Image.Resampling.LANCZOS)
-            img.save(outp,'JPEG',quality=85)
+            img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+            img.save(outp, 'JPEG', quality=85)
             paths.append(outp)
-            logger.info(f"[{run_id}] Processed photo {i}")
+            logger.info(f"[{run_id}] Processed photo #{i} → {outp}")
 
-        # 3) Zip
+        # 4) Zip them up
         zip_path = f"temp_zips/{run_id}.zip"
-        with zipfile.ZipFile(zip_path,'w') as zf:
+        with zipfile.ZipFile(zip_path, 'w') as zf:
             for idx, p in enumerate(paths, start=1):
-                if os.path.exists(p):  # Safe path handling
+                if os.path.exists(p):
                     zf.write(p, f"photo_{idx:02d}.jpg")
         logger.info(f"[{run_id}] Created zip at {zip_path}")
 
-        # 4) Token - using consistent TOK format
-        token_str = "TOK"  # Use consistent token like in your working example
+        # 5) Generate token & store
+        token_str = "TOK"
         store[run_id].update(token=token_str, zip_path=zip_path)
 
-        return jsonify(success=True,
-                       character_id=run_id,
-                       token_string=token_str,
-                       zip_path=zip_path)
+        # 6) Return expected payload
+        return jsonify({
+            'success':      True,
+            'character_id': run_id,
+            'token_string': token_str,
+            'zip_path':     zip_path
+        })
 
     except Exception as e:
         logger.exception(f"[{run_id}] upload_photos error")
         return jsonify(success=False, error=str(e)), 500
-        
+
 @app.route('/start-secure-pipeline', methods=['POST'])
 def start_pipeline():
     data = request.get_json(force=True)
@@ -804,17 +805,17 @@ def get_comic_results(run_id):
         scenes_dict = record.get('comic_scenes', {})
         scene_list = []
         for sid, data in scenes_dict.items():
-            scene_list.append({
-                "scene_id":   sid,
+            entry = {
+                "scene_id": sid,
                 "description": data["description"],
-                "image_url":   data["image_url"],
-                "question":    data.get("question"),
-                "options":     data.get("options"),
-                "next":        COMIC_SCENES[sid].get("next"),   # <-- your A/B pointers
-                "end":         COMIC_SCENES[sid].get("end", False),
-                "lesson":      data.get("lesson")
-            })
-
+                "image_url":  data["image_url"],
+                "question":   data.get("question"),
+                "options":    data.get("options"),
+                "next":       COMIC_SCENES[sid].get("next"),   # <— here
+                "lesson":     data.get("lesson")
+            }
+            scene_list.append(entry)
+        # return the reshaped payload
         return jsonify({
             "success":      record["success"],
             "status":       record["status"],
