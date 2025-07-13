@@ -255,68 +255,60 @@ def index():
 
 @app.route('/upload-photos', methods=['POST'])
 def upload_photos():
+    # 1) Generate a new run ID and read form fields
     run_id = str(uuid.uuid4())[:8]
-    try:
-        # 1) Read form metadata
-        meta = {k: request.form[k] for k in ('name', 'gender', 'age', 'outfit')}
-        store[run_id] = {'meta': meta}
+    meta = {k: request.form[k] for k in ('name', 'gender', 'age', 'outfit')}
+    store[run_id] = {'meta': meta}
 
-        # 2) Collect all uploaded files whose field-name starts with "photo"
-        photo_keys = [key for key in request.files.keys() if key.startswith('photo')]
-        files = []
-        for key in photo_keys:
-            files.extend(request.files.getlist(key))
+    # 2) Collect all uploaded photos
+    photo_keys = [key for key in request.files.keys() if key.startswith('photo')]
+    files = []
+    for key in photo_keys:
+        files.extend(request.files.getlist(key))
 
-        # 3) Process each image: sanitize name, resize, save locally
-        paths = []
-        for i, f in enumerate(files, start=1):
-            if not f.filename:
-                continue
-            ext = secure_filename(f.filename).rsplit('.', 1)[-1].lower() if '.' in f.filename else 'jpg'
-            outp = f"temp_photos/{run_id}_{i:02d}.{ext}"
-            img = Image.open(f.stream).convert('RGB')
-            img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
-            img.save(outp, 'JPEG', quality=85)
-            paths.append(outp)
-            logger.info(f"[{run_id}] Processed photo #{i} → {outp}")
+    # 3) Process & save each image
+    os.makedirs('temp_photos', exist_ok=True)
+    paths = []
+    for i, f in enumerate(files, start=1):
+        if not f.filename:
+            continue
+        ext = secure_filename(f.filename).rsplit('.', 1)[-1].lower() if '.' in f.filename else 'jpg'
+        outp = f"temp_photos/{run_id}_{i:02d}.{ext}"
+        img = Image.open(f.stream).convert('RGB')
+        img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+        img.save(outp, 'JPEG', quality=85)
+        paths.append(outp)
+        logger.info(f"[{run_id}] Processed photo #{i} → {outp}")
 
-        # 4) Zip them up
-        zip_path = f"temp_zips/{run_id}.zip"
-        with zipfile.ZipFile(zip_path, 'w') as zf:
-            for idx, p in enumerate(paths, start=1):
-                if os.path.exists(p):
-                    zf.write(p, f"photo_{idx:02d}.jpg")
-        logger.info(f"[{run_id}] Created zip at {zip_path}")
+    # 4) Zip them up
+    os.makedirs('temp_zips', exist_ok=True)
+    zip_path = f"temp_zips/{run_id}.zip"
+    with zipfile.ZipFile(zip_path, 'w') as zf:
+        for idx, p in enumerate(paths, start=1):
+            if os.path.exists(p):
+                zf.write(p, f"photo_{idx:02d}.jpg")
+    logger.info(f"[{run_id}] Created zip at {zip_path}")
 
-        # 5) Generate token & store
-        token_str = "TOK"
-        store[run_id].update(token=token_str, zip_path=zip_path)
+    # 5) Generate token & persist everything for the pipeline
+    token_str = "TOK"
+    store[run_id].update(token=token_str, zip_path=zip_path)
+    logger.info(f"[{run_id}] Persisted zip_path={zip_path} and token={token_str} into store")
 
-        # 6) Return expected payload
-        return jsonify({
-            'success':      True,
-            'character_id': run_id,
-            'token_string': token_str,
-            'zip_path':     zip_path
-        })
-
-    except Exception as e:
-        logger.exception(f"[{run_id}] upload_photos error")
-        return jsonify(success=False, error=str(e)), 500
+    # 6) Return exactly what Bubble needs
+    return jsonify({
+        'success':      True,
+        'character_id': run_id,
+        'token_string': token_str,
+        'zip_path':     zip_path
+    })
 
 @app.route('/start-secure-pipeline', methods=['POST'])
 def start_pipeline():
-    data     = request.get_json(force=True)
-    run_id   = data['character_id']
-    token    = data.get('token_string')
-    zip_path = data.get('zip_path')
+    # Only needs the run ID—zip_path & token are already in `store`
+    data   = request.get_json(force=True)
+    run_id = data['character_id']
 
-    # Persist everything for the pipeline thread
-    existing = store.get(run_id, {})
-    existing.update(token=token, zip_path=zip_path)
-    store[run_id] = existing
-
-    logger.info(f"[{run_id}] Launching pipeline thread (zip_path={zip_path})")
+    logger.info(f"[{run_id}] Launching pipeline thread")
     threading.Thread(target=run_pipeline, args=(run_id,), daemon=True).start()
     return jsonify(success=True, run_id=run_id)
 
