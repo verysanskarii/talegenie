@@ -304,12 +304,21 @@ def upload_photos():
 
 @app.route('/start-secure-pipeline', methods=['POST'])
 def start_pipeline():
-    # Only needs the run ID—zip_path & token are already in `store`
-    data   = request.get_json(force=True)
-    run_id = data['character_id']
+    # 1. Read the raw JSON body
+    data = request.get_json(force=True)
+    logger.info(f"[/start-secure-pipeline] Received payload: {data!r}")
 
+    # 2. Pull out only the character_id
+    run_id = data.get('character_id')
+    if not run_id:
+        logger.error(f"[/start-secure-pipeline] Missing character_id in payload!")
+        return jsonify(success=False, error="character_id missing"), 400
+
+    # 3. Fire off your pipeline thread (zip_path and token are already in store[run_id])
     logger.info(f"[{run_id}] Launching pipeline thread")
     threading.Thread(target=run_pipeline, args=(run_id,), daemon=True).start()
+
+    # 4. Respond immediately to Bubble
     return jsonify(success=True, run_id=run_id)
 
 def run_pipeline(run_id):
