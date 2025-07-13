@@ -306,9 +306,17 @@ def upload_photos():
 
 @app.route('/start-secure-pipeline', methods=['POST'])
 def start_pipeline():
-    data = request.get_json(force=True)
-    run_id = data['character_id']
-    logger.info(f"[{run_id}] Launching pipeline thread")
+    data     = request.get_json(force=True)
+    run_id   = data['character_id']
+    token    = data.get('token_string')
+    zip_path = data.get('zip_path')
+
+    # Persist everything for the pipeline thread
+    existing = store.get(run_id, {})
+    existing.update(token=token, zip_path=zip_path)
+    store[run_id] = existing
+
+    logger.info(f"[{run_id}] Launching pipeline thread (zip_path={zip_path})")
     threading.Thread(target=run_pipeline, args=(run_id,), daemon=True).start()
     return jsonify(success=True, run_id=run_id)
 
@@ -808,17 +816,18 @@ def get_comic_results(run_id):
             entry = {
                 "scene_id": sid,
                 "description": data["description"],
-                "image_url":  data["image_url"],
-                "question":   data.get("question"),
-                "options":    data.get("options"),
-                "next":       COMIC_SCENES[sid].get("next"),   # <— here
-                "lesson":     data.get("lesson")
+                "image_url": data["image_url"],
+                "question": data.get("question"),
+                "options": data.get("options"),
+                "next": COMIC_SCENES[sid].get("next"),
+                "lesson": data.get("lesson")
             }
             scene_list.append(entry)
+
         # return the reshaped payload
         return jsonify({
-            "success":      record["success"],
-            "status":       record["status"],
+            "success": record["success"],
+            "status": record["status"],
             "comic_scenes": scene_list
         })
 
